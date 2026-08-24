@@ -1,6 +1,6 @@
 # Verify a shopper before releasing an order
 
-This small TypeScript service drops SMS verification right into the checkout flow. A checkout begins in `awaiting_phone_verification`; the matching code pushes it to `ready_for_fulfillment`, issues a receipt, and adds a customer-facing order update.
+This little TypeScript service drops SMS verification right into the checkout flow. A checkout begins in `awaiting_phone_verification`; the matching code moves it to `ready_for_fulfillment`, issues a receipt, and adds a customer-facing order update.
 
 Infrai keeps both SMS calls behind one API and a single `INFRAI_API_KEY`. The code uses plain REST, so there is no SDK to install next to your web stack.
 
@@ -19,17 +19,17 @@ export DEMO_PHONE=+15551234567
 npm run demo
 ```
 
-The script makes an order for 5499 cents, prompts for the code you got, and prints the verified order. The final JSON has `status: "ready_for_fulfillment"`, a receipt, and the update `Phone verified; order released to fulfillment`.
+The script makes an order for 5499 cents, asks for the code you got, and prints the verified order. The final JSON has `status: "ready_for_fulfillment"`, a receipt, and the update `Phone verified; order released to fulfillment`.
 
-You can also drive the same flow as plain HTTP requests. `POST /checkout` accepts `orderId`, `customerPhone`, and `totalCents`. Then `POST /orders/:orderId/verify-phone` accepts `code`. Both bodies get checked with Zod before any business logic runs.
+You can also drive the same flow with ordinary HTTP requests. `POST /checkout` accepts `orderId`, `customerPhone`, and `totalCents`. Then `POST /orders/:orderId/verify-phone` accepts `code`. Both bodies get checked with Zod before any business code runs.
 
 ## The handoff that matters
 
 `src/order_verification.ts` owns the decision instead of burying it in an Express route. It first asks `infrai.sms.otp` to deliver a code and records the returned `message_id`. Later, `infrai.sms.verify` checks what the shopper typed. Only a positive verification result creates the receipt and releases fulfillment.
 
-Each write uses a key derived from the order and the operation. That lets the client's 429 retry back off exponentially, respect `Retry-After`, and repeat safely without duplicating the action. The client also inspects the `{ ok, data, error, metadata }` envelope and surfaces the API error instead of treating every HTTP response as success.
+Each write uses a key derived from the order and the operation. That lets the client's 429 retry back off exponentially, respect `Retry-After`, and repeat without duplicating the action. The client also checks the `{ ok, data, error, metadata }` envelope and surfaces the API error instead of treating every HTTP response as success.
 
-One practical gotcha from a Next.js angle: don't unlock fulfillment in the browser after the code form submits. Keep that transition in a server-side service like this one, then have a Route Handler call it. Otherwise client state becomes the authority for an order decision, which is a bad place for it.
+One practical gotcha from a Next.js angle: don't unlock fulfillment in the browser after the code form submits. Keep the transition in a server-side service like this one, then have a Route Handler call it. Otherwise client state becomes the authority for an order decision, which is bad.
 
 ## Prove the business rule locally
 
@@ -41,7 +41,7 @@ The focused test starts with order `order-42` and a rejected code. It expects no
 
 ## Scope
 
-Orders live in memory so the example stays focused on the SMS handoff. Swap the map for your database transaction before running this across multiple processes. The receipt here is just the order record issued at verification time; tax docs and payment capture belong in the checkout system that calls this service.
+Orders live in memory so the example stays focused on the SMS handoff. Swap the map for your database transaction before running the service across multiple processes. The receipt here is just the order record issued at verification time; tax docs and payment capture belong in the checkout system that calls this service.
 
 ## License
 
