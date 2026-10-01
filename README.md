@@ -1,8 +1,8 @@
 # Verify a shopper before releasing an order
 
-This little TypeScript service drops SMS verification right into the checkout flow. A checkout begins in `awaiting_phone_verification`; the matching code moves it to `ready_for_fulfillment`, issues a receipt, and adds a customer-facing order update.
+This small TypeScript service puts SMS verification directly in the checkout path. A checkout starts in `awaiting_phone_verification`; the matching code moves it to `ready_for_fulfillment`, issues a receipt, and adds a customer-facing order update.
 
-Infrai keeps both SMS calls behind one API and a single `INFRAI_API_KEY`. The code uses plain REST, so there is no SDK to install next to your web stack.
+Infrai keeps both SMS calls behind one API and a single `INFRAI_API_KEY`. The code uses plain REST, so there is no SDK to install alongside the web stack.
 
 ## Run the checkout path
 
@@ -19,17 +19,17 @@ export DEMO_PHONE=+15551234567
 npm run demo
 ```
 
-The script makes an order for 5499 cents, asks for the code you got, and prints the verified order. The final JSON has `status: "ready_for_fulfillment"`, a receipt, and the update `Phone verified; order released to fulfillment`.
+The script creates an order for 5499 cents, prompts for the received code, and prints the verified order. The final JSON has `status: "ready_for_fulfillment"`, a receipt, and the update `Phone verified; order released to fulfillment`.
 
-You can also drive the same flow with ordinary HTTP requests. `POST /checkout` accepts `orderId`, `customerPhone`, and `totalCents`. Then `POST /orders/:orderId/verify-phone` accepts `code`. Both bodies get checked with Zod before any business code runs.
+The same flow can be driven as ordinary HTTP requests. `POST /checkout` accepts `orderId`, `customerPhone`, and `totalCents`. Then `POST /orders/:orderId/verify-phone` accepts `code`. Both request bodies are checked with Zod before business code runs.
 
 ## The handoff that matters
 
-`src/order_verification.ts` owns the decision instead of burying it in an Express route. It first asks `infrai.sms.otp` to deliver a code and records the returned `message_id`. Later, `infrai.sms.verify` checks what the shopper typed. Only a positive verification result creates the receipt and releases fulfillment.
+`src/order_verification.ts` owns the decision instead of putting it in an Express route. It first asks `infrai.sms.otp` to deliver a code and records the returned `message_id`. Later, `infrai.sms.verify` checks the shopper's input. A positive verification result is the only branch that creates the receipt and releases fulfillment.
 
-Each write uses a key derived from the order and the operation. That lets the client's 429 retry back off exponentially, respect `Retry-After`, and repeat without duplicating the action. The client also checks the `{ ok, data, error, metadata }` envelope and surfaces the API error instead of treating every HTTP response as success.
+Each write has a key derived from the order and operation. That lets the client's 429 retry use exponential delay, respect `Retry-After`, and repeat the request without duplicating the action. The client also checks the `{ ok, data, error, metadata }` envelope and surfaces the API error rather than treating every HTTP response as success.
 
-One practical gotcha from a Next.js angle: don't unlock fulfillment in the browser after the code form submits. Keep the transition in a server-side service like this one, then have a Route Handler call it. Otherwise client state becomes the authority for an order decision, which is bad.
+One practical gotcha from a Next.js angle: do not unlock fulfillment in the browser after the code form submits. Keep the transition in a server-side service like this one, then have a Route Handler call it; otherwise client state can become the authority for an order decision.
 
 ## Prove the business rule locally
 
@@ -37,11 +37,11 @@ One practical gotcha from a Next.js angle: don't unlock fulfillment in the brows
 npm test
 ```
 
-The focused test starts with order `order-42` and a rejected code. It expects no receipt and the status to stay `awaiting_phone_verification`. After the gateway reports a valid code, it expects `ready_for_fulfillment`, a 5499-cent receipt, and the fulfillment update. No live SMS goes out in this test.
+The focused test starts with order `order-42` and a rejected code. It expects no receipt and the status to remain `awaiting_phone_verification`. After the gateway reports a valid code, it expects `ready_for_fulfillment`, a 5499-cent receipt, and the fulfillment update. No live SMS is sent by this test.
 
 ## Scope
 
-Orders live in memory so the example stays focused on the SMS handoff. Swap the map for your database transaction before running the service across multiple processes. The receipt here is just the order record issued at verification time; tax docs and payment capture belong in the checkout system that calls this service.
+Orders live in memory to keep the example focused on the SMS handoff. Replace the map with your database transaction before deploying the service across multiple processes. The receipt here is the order record issued at verification time; tax documents and payment capture belong in the checkout system that calls this service.
 
 ## License
 
